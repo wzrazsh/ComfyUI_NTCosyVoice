@@ -6,6 +6,7 @@ git clone https://github.com/muxueChen/ComfyUI_NTCosyVoice.git
 ```
 ## Install dependency packages
 ```angular2html
+cd ComfyUI_NTCosyVoice
 pip install -r requirements.txt
 ```
 ## download models
