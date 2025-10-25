@@ -27,7 +27,8 @@ class NTCosyVoiceZeroShotSampler:
     def cosyvoice(self):
         if self.__cosyvoice is None:
             model_path = os.path.join(nor_dir, 'pretrained_models/CosyVoice2-0.5B')
-            self.__cosyvoice = CosyVoice2(model_path, load_jit=True, load_onnx=False, load_trt=False)
+            # 修复模型路径，使用绝对路径
+            self.__cosyvoice = CosyVoice2(model_path, load_jit=False, load_trt=False, load_vllm=False, fp16=False)
         return self.__cosyvoice
 
     @classmethod
@@ -70,7 +71,8 @@ class NTCosyVoiceCrossLingualSampler:
     def cosyvoice(self):
         if self.__cosyvoice is None:
             model_path = os.path.join(nor_dir, 'pretrained_models/CosyVoice2-0.5B')
-            self.__cosyvoice = CosyVoice2(model_path, load_jit=True, load_onnx=False, load_trt=False)
+            # 修复模型路径，使用绝对路径
+            self.__cosyvoice = CosyVoice2(model_path, load_jit=False, load_trt=False, load_vllm=False, fp16=False)
         return self.__cosyvoice
 
     @classmethod
@@ -113,7 +115,8 @@ class NTCosyVoiceInstruct2Sampler:
     def cosyvoice(self):
         if self.__cosyvoice is None:
             model_path = os.path.join(nor_dir, 'pretrained_models/CosyVoice2-0.5B')
-            self.__cosyvoice = CosyVoice2(model_path, load_jit=True, load_onnx=False, load_trt=False)
+            # 修复模型路径，使用绝对路径
+            self.__cosyvoice = CosyVoice2(model_path, load_jit=False, load_trt=False, load_vllm=False, fp16=False)
         return self.__cosyvoice
 
     @classmethod

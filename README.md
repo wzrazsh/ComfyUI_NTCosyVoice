@@ -2,7 +2,7 @@
 ComfyUI_NTCosyVoice is a plugin of ComfyUI for Cosysvoice2
 ## install plugin
 ```angular2html
-git clone https://github.com/muxueChen/ComfyUI_NTCosyVoice.git
+git clone https://github.com/wzrazsh/ComfyUI_NTCosyVoice.git
 ```
 ## Install dependency packages
 ```angular2html
