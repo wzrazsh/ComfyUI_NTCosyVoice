@@ -55,14 +55,51 @@ class NTCosyVoiceZeroShotSampler:
         print(f"waveform:{waveform}, sample_rate:{sample_rate}")
         prompt_speech_16k = nt_load_wav(waveform, sample_rate, 16000)
         speechs = []
-        for i, j in enumerate(self.cosyvoice.inference_zero_shot(tts_text=text, prompt_text=prompt_text, prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
-            speechs.append(j['tts_speech'])
+        
+        try:
+            for i, j in enumerate(self.cosyvoice.inference_zero_shot(tts_text=text, prompt_text=prompt_text, prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
+                speechs.append(j['tts_speech'])
 
-        tts_speech = torch.cat(speechs, dim=1)
-        tts_speech = tts_speech.unsqueeze(0)
-        outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
+            tts_speech = torch.cat(speechs, dim=1)
+            tts_speech = tts_speech.unsqueeze(0)
+            outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
 
-        return (outaudio,)
+            return (outaudio,)
+        finally:
+            # 执行完成后释放GPU内存
+            self._cleanup_gpu_memory()
+    
+    def _cleanup_gpu_memory(self):
+        """清理GPU内存"""
+        if torch.cuda.is_available():
+            # 清理PyTorch缓存
+            torch.cuda.empty_cache()
+            
+            # 如果cosyvoice对象存在，尝试清理其内部状态
+            if self.__cosyvoice is not None:
+                # 尝试调用模型的清理方法（如果存在）
+                if hasattr(self.__cosyvoice, 'model') and self.__cosyvoice.model is not None:
+                    # 将模型移动到CPU并删除GPU引用
+                    if hasattr(self.__cosyvoice.model, 'to'):
+                        self.__cosyvoice.model.to('cpu')
+                    # 删除模型引用
+                    del self.__cosyvoice.model
+                
+                # 清理其他可能的GPU张量
+                if hasattr(self.__cosyvoice, 'device'):
+                    # 重置设备状态
+                    self.__cosyvoice.device = 'cpu'
+                
+                # 强制垃圾回收
+                import gc
+                gc.collect()
+                
+                # 再次清理GPU缓存
+                torch.cuda.empty_cache()
+                
+                print("CosyVoice GPU内存已释放")
+            else:
+                print("CosyVoice对象不存在，跳过内存清理")
 
 
 class NTCosyVoiceCloneSpeaker:
@@ -87,8 +124,8 @@ class NTCosyVoiceCloneSpeaker:
             },
         }
 
-    RETURN_TYPES = ("BOOLEAN",)
-    RETURN_NAMES = ("success",)
+    RETURN_TYPES = ("BOOLEAN", "STRING")
+    RETURN_NAMES = ("success", "speaker_name")
     FUNCTION = "clone_speaker"
     CATEGORY = "Nineton Nodes"
     OUTPUT_NODE = True
@@ -97,17 +134,53 @@ class NTCosyVoiceCloneSpeaker:
         waveform = audio["waveform"].squeeze(0)
         sample_rate = audio["sample_rate"]
         
-        # 将音频转换为16kHz采样率
-        prompt_speech_16k = nt_load_wav(waveform, sample_rate, 16000)
-        
-        # 添加零样本说话人
-        success = self.cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, speaker_name)
-        
-        # 保存说话人信息到spk2info.pt文件
-        if success:
-            self.cosyvoice.save_spkinfo()
+        try:
+            # 将音频转换为16kHz采样率
+            prompt_speech_16k = nt_load_wav(waveform, sample_rate, 16000)
             
-        return (success,)
+            # 添加零样本说话人
+            success = self.cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, speaker_name)
+            
+            # 保存说话人信息到spk2info.pt文件
+            if success:
+                self.cosyvoice.save_spkinfo()
+                
+            return (success, speaker_name)
+        finally:
+            # 执行完成后释放GPU内存
+            self._cleanup_gpu_memory()
+    
+    def _cleanup_gpu_memory(self):
+        """清理GPU内存"""
+        if torch.cuda.is_available():
+            # 清理PyTorch缓存
+            torch.cuda.empty_cache()
+            
+            # 如果cosyvoice对象存在，尝试清理其内部状态
+            if self.__cosyvoice is not None:
+                # 尝试调用模型的清理方法（如果存在）
+                if hasattr(self.__cosyvoice, 'model') and self.__cosyvoice.model is not None:
+                    # 将模型移动到CPU并删除GPU引用
+                    if hasattr(self.__cosyvoice.model, 'to'):
+                        self.__cosyvoice.model.to('cpu')
+                    # 删除模型引用
+                    del self.__cosyvoice.model
+                
+                # 清理其他可能的GPU张量
+                if hasattr(self.__cosyvoice, 'device'):
+                    # 重置设备状态
+                    self.__cosyvoice.device = 'cpu'
+                
+                # 强制垃圾回收
+                import gc
+                gc.collect()
+                
+                # 再次清理GPU缓存
+                torch.cuda.empty_cache()
+                
+                print("CosyVoice GPU内存已释放")
+            else:
+                print("CosyVoice对象不存在，跳过内存清理")
 
 
 class NTCosyVoiceSelectSpeaker:
@@ -153,22 +226,58 @@ class NTCosyVoiceSelectSpeaker:
         if speaker_name not in available_speakers:
             raise ValueError(f"说话人 '{speaker_name}' 不存在。可用的说话人: {available_speakers}")
         
-        # 使用指定的说话人进行零样本推理
-        for i, j in enumerate(self.cosyvoice.inference_zero_shot(
-            tts_text=text, 
-            prompt_text="", 
-            prompt_speech_16k=torch.zeros(1, 16000),  # 占位符音频
-            zero_shot_spk_id=speaker_name,
-            stream=False, 
-            speed=speed
-        )):
-            speechs.append(j['tts_speech'])
+        try:
+            # 使用指定的说话人进行零样本推理
+            for i, j in enumerate(self.cosyvoice.inference_zero_shot(
+                tts_text=text, 
+                prompt_text="", 
+                prompt_speech_16k=torch.zeros(1, 16000),  # 占位符音频
+                zero_shot_spk_id=speaker_name,
+                stream=False, 
+                speed=speed
+            )):
+                speechs.append(j['tts_speech'])
 
-        tts_speech = torch.cat(speechs, dim=1)
-        tts_speech = tts_speech.unsqueeze(0)
-        outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
+            tts_speech = torch.cat(speechs, dim=1)
+            tts_speech = tts_speech.unsqueeze(0)
+            outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
 
-        return (outaudio,)
+            return (outaudio,)
+        finally:
+            # 执行完成后释放GPU内存
+            self._cleanup_gpu_memory()
+    
+    def _cleanup_gpu_memory(self):
+        """清理GPU内存"""
+        if torch.cuda.is_available():
+            # 清理PyTorch缓存
+            torch.cuda.empty_cache()
+            
+            # 如果cosyvoice对象存在，尝试清理其内部状态
+            if self.__cosyvoice is not None:
+                # 尝试调用模型的清理方法（如果存在）
+                if hasattr(self.__cosyvoice, 'model') and self.__cosyvoice.model is not None:
+                    # 将模型移动到CPU并删除GPU引用
+                    if hasattr(self.__cosyvoice.model, 'to'):
+                        self.__cosyvoice.model.to('cpu')
+                    # 删除模型引用
+                    del self.__cosyvoice.model
+                
+                # 清理其他可能的GPU张量
+                if hasattr(self.__cosyvoice, 'device'):
+                    # 重置设备状态
+                    self.__cosyvoice.device = 'cpu'
+                
+                # 强制垃圾回收
+                import gc
+                gc.collect()
+                
+                # 再次清理GPU缓存
+                torch.cuda.empty_cache()
+                
+                print("CosyVoice GPU内存已释放")
+            else:
+                print("CosyVoice对象不存在，跳过内存清理")
 
 
 class NTCosyVoiceCrossLingualSampler:
@@ -204,15 +313,52 @@ class NTCosyVoiceCrossLingualSampler:
 
         prompt_speech_16k = nt_load_wav(waveform, sample_rate, 16000)
         speechs = []
-        for i, j in enumerate(self.cosyvoice.inference_cross_lingual(tts_text=text,
-                prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
-            speechs.append(j['tts_speech'])
+        
+        try:
+            for i, j in enumerate(self.cosyvoice.inference_cross_lingual(tts_text=text,
+                    prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
+                speechs.append(j['tts_speech'])
 
-        tts_speech = torch.cat(speechs, dim=1)
-        tts_speech = tts_speech.unsqueeze(0)
-        outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
+            tts_speech = torch.cat(speechs, dim=1)
+            tts_speech = tts_speech.unsqueeze(0)
+            outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
 
-        return (outaudio,)
+            return (outaudio,)
+        finally:
+            # 执行完成后释放GPU内存
+            self._cleanup_gpu_memory()
+    
+    def _cleanup_gpu_memory(self):
+        """清理GPU内存"""
+        if torch.cuda.is_available():
+            # 清理PyTorch缓存
+            torch.cuda.empty_cache()
+            
+            # 如果cosyvoice对象存在，尝试清理其内部状态
+            if self.__cosyvoice is not None:
+                # 尝试调用模型的清理方法（如果存在）
+                if hasattr(self.__cosyvoice, 'model') and self.__cosyvoice.model is not None:
+                    # 将模型移动到CPU并删除GPU引用
+                    if hasattr(self.__cosyvoice.model, 'to'):
+                        self.__cosyvoice.model.to('cpu')
+                    # 删除模型引用
+                    del self.__cosyvoice.model
+                
+                # 清理其他可能的GPU张量
+                if hasattr(self.__cosyvoice, 'device'):
+                    # 重置设备状态
+                    self.__cosyvoice.device = 'cpu'
+                
+                # 强制垃圾回收
+                import gc
+                gc.collect()
+                
+                # 再次清理GPU缓存
+                torch.cuda.empty_cache()
+                
+                print("CosyVoice GPU内存已释放")
+            else:
+                print("CosyVoice对象不存在，跳过内存清理")
 
 
 class NTCosyVoiceInstruct2Sampler:
@@ -250,14 +396,51 @@ class NTCosyVoiceInstruct2Sampler:
         prompt_speech_16k = nt_load_wav(waveform, sample_rate, 16000)
 
         speechs = []
-        for i, j in enumerate(self.cosyvoice.inference_instruct2(tts_text=text, instruct_text=instruct, prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
-            speechs.append(j['tts_speech'])
+        
+        try:
+            for i, j in enumerate(self.cosyvoice.inference_instruct2(tts_text=text, instruct_text=instruct, prompt_speech_16k=prompt_speech_16k, stream=False, speed=speed)):
+                speechs.append(j['tts_speech'])
 
-        tts_speech = torch.cat(speechs, dim=1)
-        tts_speech = tts_speech.unsqueeze(0)
-        outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
+            tts_speech = torch.cat(speechs, dim=1)
+            tts_speech = tts_speech.unsqueeze(0)
+            outaudio = {"waveform": tts_speech, "sample_rate": self.cosyvoice.sample_rate}
 
-        return (outaudio,)
+            return (outaudio,)
+        finally:
+            # 执行完成后释放GPU内存
+            self._cleanup_gpu_memory()
+    
+    def _cleanup_gpu_memory(self):
+        """清理GPU内存"""
+        if torch.cuda.is_available():
+            # 清理PyTorch缓存
+            torch.cuda.empty_cache()
+            
+            # 如果cosyvoice对象存在，尝试清理其内部状态
+            if self.__cosyvoice is not None:
+                # 尝试调用模型的清理方法（如果存在）
+                if hasattr(self.__cosyvoice, 'model') and self.__cosyvoice.model is not None:
+                    # 将模型移动到CPU并删除GPU引用
+                    if hasattr(self.__cosyvoice.model, 'to'):
+                        self.__cosyvoice.model.to('cpu')
+                    # 删除模型引用
+                    del self.__cosyvoice.model
+                
+                # 清理其他可能的GPU张量
+                if hasattr(self.__cosyvoice, 'device'):
+                    # 重置设备状态
+                    self.__cosyvoice.device = 'cpu'
+                
+                # 强制垃圾回收
+                import gc
+                gc.collect()
+                
+                # 再次清理GPU缓存
+                torch.cuda.empty_cache()
+                
+                print("CosyVoice GPU内存已释放")
+            else:
+                print("CosyVoice对象不存在，跳过内存清理")
 
 
 NODE_CLASS_MAPPINGS = {
