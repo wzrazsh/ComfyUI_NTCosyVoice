@@ -12,12 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Tuple
+import os
+import sys
+import math
+from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import pack, rearrange, repeat
 from cosyvoice.utils.common import mask_to_bias
 from cosyvoice.utils.mask import add_optional_chunk_mask
+
+# 添加必要的路径
+nor_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+Matcha_path = os.path.join(nor_dir, 'third_party/Matcha-TTS')
+sys.path.append(nor_dir)
+sys.path.append(Matcha_path)
+
 from matcha.models.components.decoder import SinusoidalPosEmb, Block1D, ResnetBlock1D, Downsample1D, TimestepEmbedding, Upsample1D
 from matcha.models.components.transformer import BasicTransformerBlock
 

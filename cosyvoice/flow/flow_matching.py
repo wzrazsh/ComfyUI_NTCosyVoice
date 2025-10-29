@@ -12,8 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+import sys
 import torch
 import torch.nn.functional as F
+
+# 添加必要的路径
+nor_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+Matcha_path = os.path.join(nor_dir, 'third_party/Matcha-TTS')
+sys.path.append(nor_dir)
+sys.path.append(Matcha_path)
+
 from matcha.models.components.flow_matching import BASECFM
 from cosyvoice.utils.common import set_all_random_seed
 
